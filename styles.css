@@ -1,8 +1,75 @@
-/*
+/* Hide Obsidian's default code block styling */
+.markdown-reading-view .block-language-paper,
+.markdown-preview-view .block-language-paper,
+.block-language-paper {
+	display: block;
+	box-shadow: none !important;
+	border: none !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.markdown-reading-view .block-language-paper:hover,
+.markdown-preview-view .block-language-paper:hover,
+.block-language-paper:hover {
+	box-shadow: none !important;
+	border: none !important;
+	background: transparent !important;
+}
 
-If your plugin does not need CSS, delete this file.
+.cm-preview-code-block:has(.block-language-paper),
+div:has(> .block-language-paper) {
+	box-shadow: none !important;
+	border: none !important;
+	background: transparent !important;
+}
 
-*/
+.block-language-paper .edit-block-button,
+.cm-preview-code-block:has(.block-language-paper) .edit-block-button {
+	display: none !important;
+}
+
+/* Paper card styling */
+.paper-card {
+	position: relative;
+	display: inline-block;
+	min-width: 300px;
+	padding: 10px 40px 10px 14px;
+	border-left: 2px solid var(--text-normal);
+	background-color: var(--background-secondary);
+	border-radius: 0 4px 4px 0;
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+	line-height: 1.5;
+}
+
+.paper-card:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.paper-card-title {
+	font-weight: 700;
+	color: var(--text-normal);
+}
+
+.paper-card-meta {
+	color: var(--text-muted);
+}
+
+.paper-card-link {
+	position: absolute;
+	top: 8px;
+	right: 10px;
+	text-decoration: none;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+}
+
+.paper-card-link:hover {
+	color: var(--text-normal);
+}
+
+.paper-card-link svg {
+	display: block;
+}

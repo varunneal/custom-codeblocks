@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "custom-codeblocks",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Custom rendered codeblocks for Obsidian",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
