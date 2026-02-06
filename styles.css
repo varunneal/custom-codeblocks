@@ -34,7 +34,7 @@ div:has(> .block-language-paper) {
 	position: relative;
 	display: inline-block;
 	min-width: 300px;
-	padding: 10px 40px 10px 14px;
+	padding: 10px 66px 10px 14px;
 	border-left: 2px solid var(--text-normal);
 	background-color: var(--background-secondary);
 	border-radius: 0 4px 4px 0;
@@ -48,7 +48,11 @@ div:has(> .block-language-paper) {
 }
 
 .paper-card-title {
-	font-weight: 700;
+	font-family: "Times New Roman", "Palatino Linotype", "Georgia", serif;
+	font-weight: 400;
+	font-variant: small-caps;
+	font-size: 1.1em;
+	letter-spacing: 0.02em;
 	color: var(--text-normal);
 }
 
@@ -72,4 +76,215 @@ div:has(> .block-language-paper) {
 
 .paper-card-link svg {
 	display: block;
+}
+
+.paper-card-download,
+.paper-card-download:focus,
+.paper-card-download:active,
+.paper-card-download:hover {
+	position: absolute;
+	top: 8px;
+	right: 36px;
+	background: none !important;
+	background-color: transparent !important;
+	border: none !important;
+	outline: none !important;
+	box-shadow: none !important;
+	border-radius: 0 !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	cursor: pointer;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	-webkit-appearance: none !important;
+	appearance: none !important;
+	line-height: 1;
+	height: 20px;
+	width: 20px;
+}
+
+.paper-card-download:hover {
+	color: var(--text-normal);
+}
+
+.paper-card-download svg {
+	display: block;
+}
+
+/* ============================================
+   Syntax Highlighting - Ayu Theme
+   Applied to Obsidian's native code blocks
+   ============================================ */
+
+/* Ayu Dark - Edit mode (CodeMirror) */
+.theme-dark .HyperMD-codeblock .cm-keyword {
+	color: #FFB454 !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-def,
+.theme-dark .HyperMD-codeblock .cm-callee {
+	color: #59C2FF !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-string,
+.theme-dark .HyperMD-codeblock .cm-string-2 {
+	color: #C2D94C !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-number {
+	color: #FFEE99 !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-comment {
+	color: #686868 !important;
+	font-style: italic;
+}
+
+.theme-dark .HyperMD-codeblock .cm-builtin {
+	color: #95E6CB !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-variable,
+.theme-dark .HyperMD-codeblock .cm-variable-2,
+.theme-dark .HyperMD-codeblock .cm-variable-3 {
+	color: #B3B1AD !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-property {
+	color: #59C2FF !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-operator {
+	color: #EA6C73 !important;
+}
+
+.theme-dark .HyperMD-codeblock .cm-punctuation {
+	color: #B3B1AD !important;
+}
+
+/* Ayu Dark - Read mode (Prism tokens) */
+.theme-dark .token.keyword {
+	color: #FFB454 !important;
+}
+
+.theme-dark .token.function {
+	color: #59C2FF !important;
+}
+
+.theme-dark .token.string {
+	color: #C2D94C !important;
+}
+
+.theme-dark .token.number {
+	color: #FFEE99 !important;
+}
+
+.theme-dark .token.comment {
+	color: #686868 !important;
+	font-style: italic;
+}
+
+.theme-dark .token.builtin,
+.theme-dark .token.class-name {
+	color: #95E6CB !important;
+}
+
+.theme-dark .token.operator {
+	color: #EA6C73 !important;
+}
+
+.theme-dark .token.punctuation {
+	color: #B3B1AD !important;
+}
+
+.theme-dark .token.boolean,
+.theme-dark .token.constant {
+	color: #FFEE99 !important;
+}
+
+/* Ayu Light - Edit mode (CodeMirror) */
+.theme-light .HyperMD-codeblock .cm-keyword {
+	color: #EBA54D !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-def,
+.theme-light .HyperMD-codeblock .cm-callee {
+	color: #4196DF !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-string,
+.theme-light .HyperMD-codeblock .cm-string-2 {
+	color: #80AB24 !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-number {
+	color: #9870C3 !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-comment {
+	color: #343434 !important;
+	font-style: italic;
+}
+
+.theme-light .HyperMD-codeblock .cm-builtin {
+	color: #51B891 !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-variable,
+.theme-light .HyperMD-codeblock .cm-variable-2,
+.theme-light .HyperMD-codeblock .cm-variable-3 {
+	color: #5C6166 !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-property {
+	color: #4196DF !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-operator {
+	color: #E7666A !important;
+}
+
+.theme-light .HyperMD-codeblock .cm-punctuation {
+	color: #5C6166 !important;
+}
+
+/* Ayu Light - Read mode (Prism tokens) */
+.theme-light .token.keyword {
+	color: #EBA54D !important;
+}
+
+.theme-light .token.function {
+	color: #4196DF !important;
+}
+
+.theme-light .token.string {
+	color: #80AB24 !important;
+}
+
+.theme-light .token.number {
+	color: #9870C3 !important;
+}
+
+.theme-light .token.comment {
+	color: #343434 !important;
+	font-style: italic;
+}
+
+.theme-light .token.builtin,
+.theme-light .token.class-name {
+	color: #51B891 !important;
+}
+
+.theme-light .token.operator {
+	color: #E7666A !important;
+}
+
+.theme-light .token.punctuation {
+	color: #5C6166 !important;
+}
+
+.theme-light .token.boolean,
+.theme-light .token.constant {
+	color: #9870C3 !important;
 }
