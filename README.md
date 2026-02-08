@@ -31,24 +31,21 @@ A styled card with:
 
 ## Installation
 
+```bash
+cd your-vault/.obsidian/plugins/
+bun create varunneal/custom-codeblocks
+cd custom-codeblocks
+bun run build
+```
+
+Then reload Obsidian and enable the plugin in Settings → Community plugins.
+
 ### Manual Installation
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the latest release
 2. Create a folder called `custom-codeblocks` in your vault's `.obsidian/plugins/` directory
 3. Copy the downloaded files into that folder
-4. Reload Obsidian and enable the plugin in Settings → Community plugins
-
-### Development Installation
-
-```bash
-cd your-vault/.obsidian/plugins/
-git clone https://github.com/varunneal/custom-codeblocks.git
-cd custom-codeblocks
-bun install
-bun run build
-```
-
-Then reload Obsidian and enable the plugin.
+4. Reload Obsidian and enable the plugin
 
 ## Development
 
