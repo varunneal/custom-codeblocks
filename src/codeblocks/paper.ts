@@ -39,7 +39,7 @@ function parsePaperContent(source: string): PaperData {
 }
 
 function sanitizeFilename(name: string): string {
-	return name.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, ' ').trim();
+	return name.replace(/[<>:"/\\|?*]/g, '-').replace(/\s+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
 }
 
 function expandHome(filepath: string): string {
@@ -50,7 +50,7 @@ function expandHome(filepath: string): string {
 }
 
 function parseArxivId(url: string): string | null {
-	const match = url.match(/arxiv\.org\/(?:abs|pdf|src)\/([^\s?#]+?)(?:\.pdf)?$/);
+	const match = url.match(/arxiv\.org\/(?:abs|pdf|src|e-print)\/([^\s?#]+?)(?:\.pdf)?$/);
 	return match?.[1] ?? null;
 }
 
@@ -59,7 +59,7 @@ function getDownloadUrls(link: string): { pdf: string; source: string | null } {
 	if (id) {
 		return {
 			pdf: `https://arxiv.org/pdf/${id}`,
-			source: `https://arxiv.org/src/${id}`,
+			source: `https://arxiv.org/e-print/${id}`,
 		};
 	}
 	return { pdf: link, source: null };
@@ -198,8 +198,8 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 			downloads.push(
 				requestUrl({ url: sourceUrl }).then(response => {
 					extractTexFromTarball(Buffer.from(response.arrayBuffer), dir);
-				}).catch(() => {
-					// Source fetch failed — not critical, PDF is enough
+				}).catch((err) => {
+					console.warn('TeX source fetch failed:', err);
 				})
 			);
 		}
