@@ -23,7 +23,7 @@ export class CustomCodeblocksSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		new Setting(containerEl)
+		const downloadPathSetting = new Setting(containerEl)
 			.setName('Download path')
 			.setDesc('Directory where paper PDFs are saved. Use ~ for home directory. Papers are saved to {path}/{note-name}/{paper-title}.pdf.')
 			.addText(text => text
@@ -33,5 +33,6 @@ export class CustomCodeblocksSettingTab extends PluginSettingTab {
 					this.plugin.settings.downloadPath = value;
 					await this.plugin.saveSettings();
 				}));
+		downloadPathSetting.settingEl.classList.add('setting-download-path');
 	}
 }

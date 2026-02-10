@@ -113,6 +113,19 @@ div:has(> .block-language-paper) {
 	display: block;
 }
 
+/* Settings */
+.setting-download-path {
+	flex-wrap: wrap;
+}
+
+.setting-download-path .setting-item-control {
+	width: 100%;
+}
+
+.setting-download-path .setting-item-control input {
+	width: 100%;
+}
+
 /* ============================================
    Syntax Highlighting - Ayu Theme
    Applied to Obsidian's native code blocks

@@ -1,7 +1,8 @@
-import { MarkdownView, Notice, requestUrl } from 'obsidian';
+import { MarkdownView, Notice, requestUrl, htmlToMarkdown } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as zlib from 'zlib';
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const { shell } = require('electron') as { shell: { showItemInFolder(fullPath: string): void } };
 import type CustomCodeblocksPlugin from '../main';
@@ -48,6 +49,72 @@ function expandHome(filepath: string): string {
 	return filepath;
 }
 
+function parseArxivId(url: string): string | null {
+	const match = url.match(/arxiv\.org\/(?:abs|pdf|src)\/([^\s?#]+?)(?:\.pdf)?$/);
+	return match?.[1] ?? null;
+}
+
+function getDownloadUrls(link: string): { pdf: string; source: string | null } {
+	const id = parseArxivId(link);
+	if (id) {
+		return {
+			pdf: `https://arxiv.org/pdf/${id}`,
+			source: `https://arxiv.org/src/${id}`,
+		};
+	}
+	return { pdf: link, source: null };
+}
+
+function extractTexFromTarball(buffer: Buffer, dir: string): void {
+	let data: Buffer;
+	try {
+		data = zlib.gunzipSync(buffer);
+	} catch {
+		// Not gzipped — might be raw TeX
+		const text = buffer.toString('utf-8', 0, Math.min(buffer.length, 1024));
+		if (text.includes('\\document') || text.includes('\\begin') || text.includes('\\input')) {
+			fs.writeFileSync(path.join(dir, 'main.tex'), buffer);
+		}
+		return;
+	}
+
+	// Check if it's a tar archive (tar magic at offset 257)
+	const magic = data.toString('utf-8', 257, 262);
+	if (magic !== 'ustar') {
+		// Decompressed but not tar — likely a single TeX file
+		const text = data.toString('utf-8', 0, Math.min(data.length, 1024));
+		if (text.includes('\\document') || text.includes('\\begin') || text.includes('\\input')) {
+			fs.writeFileSync(path.join(dir, 'main.tex'), data);
+		}
+		return;
+	}
+
+	// Parse tar (512-byte header blocks)
+	let offset = 0;
+	while (offset + 512 <= data.length) {
+		const header = data.subarray(offset, offset + 512);
+		// Empty block signals end of archive
+		if (header.every(b => b === 0)) break;
+
+		const nameRaw = header.subarray(0, 100).toString('utf-8');
+		const name = nameRaw.replace(/\0.*$/, '');
+
+		const sizeOctal = header.subarray(124, 136).toString('utf-8').replace(/\0.*$/, '').trim();
+		const size = parseInt(sizeOctal, 8) || 0;
+
+		offset += 512; // move past header
+
+		if (name.endsWith('.tex') && size > 0) {
+			const content = data.subarray(offset, offset + size);
+			const outPath = path.join(dir, path.basename(name));
+			fs.writeFileSync(outPath, content);
+		}
+
+		// Advance past data blocks (padded to 512-byte boundary)
+		offset += Math.ceil(size / 512) * 512;
+	}
+}
+
 const DOWNLOAD_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 	<path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 	<path d="M4 17V19C4 20.1 4.9 21 6 21H18C19.1 21 20 20.1 20 19V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -57,7 +124,7 @@ const FOLDER_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" 
 	<path d="M2 6C2 4.9 2.9 4 4 4H9L11 6H20C21.1 6 22 6.9 22 8V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z" stroke="currentColor" stroke-width="2" fill="none"/>
 </svg>`;
 
-function getPaperFilepath(plugin: CustomCodeblocksPlugin, data: PaperData): string | null {
+function getPaperDir(plugin: CustomCodeblocksPlugin, data: PaperData): { dir: string; pdfPath: string; mdPath: string } | null {
 	const activeFile = plugin.app.workspace.getActiveFile();
 	if (!activeFile) return null;
 
@@ -65,7 +132,13 @@ function getPaperFilepath(plugin: CustomCodeblocksPlugin, data: PaperData): stri
 	const paperTitle = sanitizeFilename(data.title || 'Untitled');
 	const basePath = expandHome(plugin.settings.downloadPath);
 	const dir = path.join(basePath, sanitizeFilename(noteName));
-	return path.join(dir, `${paperTitle}.pdf`);
+	return { dir, pdfPath: path.join(dir, `${paperTitle}.pdf`), mdPath: path.join(dir, `${paperTitle}.md`) };
+}
+
+function findSavedFile(paths: { pdfPath: string; mdPath: string }): string | null {
+	if (fs.existsSync(paths.pdfPath)) return paths.pdfPath;
+	if (fs.existsSync(paths.mdPath)) return paths.mdPath;
+	return null;
 }
 
 function setButtonToFinder(btn: HTMLButtonElement, filepath: string) {
@@ -74,26 +147,65 @@ function setButtonToFinder(btn: HTMLButtonElement, filepath: string) {
 }
 
 async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, btn: HTMLButtonElement): Promise<void> {
-	const filepath = getPaperFilepath(plugin, data);
-	if (!filepath) {
+	const paths = getPaperDir(plugin, data);
+	if (!paths) {
 		new Notice('No active note found.');
 		return;
 	}
 
-	if (fs.existsSync(filepath)) {
-		shell.showItemInFolder(filepath);
+	const { dir, pdfPath } = paths;
+
+	const existingFile = findSavedFile(paths);
+	if (existingFile) {
+		shell.showItemInFolder(existingFile);
 		return;
 	}
 
 	new Notice(`Downloading ${sanitizeFilename(data.title || 'Untitled')}...`);
 
+	const { pdf: pdfUrl, source: sourceUrl } = getDownloadUrls(data.link);
+
 	try {
-		const response = await requestUrl({ url: data.link });
-		const dir = path.dirname(filepath);
 		fs.mkdirSync(dir, { recursive: true });
-		fs.writeFileSync(filepath, Buffer.from(response.arrayBuffer));
-		new Notice(`Saved: ${filepath}`);
-		setButtonToFinder(btn, filepath);
+
+		let savedAsMd = false;
+		const downloads: Promise<void>[] = [
+			requestUrl({ url: pdfUrl }).then(response => {
+				const buf = Buffer.from(response.arrayBuffer);
+				if (buf.length >= 4 && buf.toString('utf-8', 0, 4) === '%PDF') {
+					fs.writeFileSync(pdfPath, buf);
+				} else {
+					// Not a PDF — convert HTML to markdown
+					const html = buf.toString('utf-8');
+					const md = htmlToMarkdown(html);
+					const mdPath = pdfPath.replace(/\.pdf$/, '.md');
+					fs.writeFileSync(mdPath, md);
+					savedAsMd = true;
+				}
+			}),
+		];
+
+		if (sourceUrl) {
+			downloads.push(
+				requestUrl({ url: sourceUrl }).then(response => {
+					extractTexFromTarball(Buffer.from(response.arrayBuffer), dir);
+				}).catch(() => {
+					// Source fetch failed — not critical, PDF is enough
+				})
+			);
+		}
+
+		await Promise.all(downloads);
+
+		const texFiles = fs.readdirSync(dir).filter(f => f.endsWith('.tex'));
+		if (savedAsMd) {
+			new Notice(`Saved as Markdown: ${pdfPath.replace(/\.pdf$/, '.md')}`);
+		} else if (texFiles.length > 0) {
+			new Notice(`Saved PDF + ${texFiles.length} .tex file(s) to ${dir}`);
+		} else {
+			new Notice(`Saved: ${pdfPath}`);
+		}
+		setButtonToFinder(btn, savedAsMd ? pdfPath.replace(/\.pdf$/, '.md') : pdfPath);
 	} catch (err) {
 		new Notice(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
 	}
@@ -140,18 +252,20 @@ export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
 				attr: { 'aria-label': 'Download PDF' }
 			});
 
-			const filepath = getPaperFilepath(plugin, data);
-			if (filepath && fs.existsSync(filepath)) {
-				setButtonToFinder(downloadBtn, filepath);
+			const paths = getPaperDir(plugin, data);
+			const existing = paths ? findSavedFile(paths) : null;
+			if (existing) {
+				setButtonToFinder(downloadBtn, existing);
 			} else {
 				downloadBtn.innerHTML = DOWNLOAD_SVG;
 			}
 
 			downloadBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
-				const currentPath = getPaperFilepath(plugin, data);
-				if (currentPath && fs.existsSync(currentPath)) {
-					shell.showItemInFolder(currentPath);
+				const currentPaths = getPaperDir(plugin, data);
+				const currentFile = currentPaths ? findSavedFile(currentPaths) : null;
+				if (currentFile) {
+					shell.showItemInFolder(currentFile);
 				} else {
 					downloadPaper(plugin, data, downloadBtn);
 				}
