@@ -33,7 +33,7 @@ div:has(> .block-language-paper) {
 .paper-card {
 	position: relative;
 	display: inline-block;
-	width: 650px;
+	width: min(650px, 100%);
 	padding: 10px 66px 10px 14px;
 	border-left: 2px solid var(--text-normal);
 	background-color: var(--background-secondary);

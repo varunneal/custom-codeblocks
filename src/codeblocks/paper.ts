@@ -105,9 +105,17 @@ function extractTexFromTarball(buffer: Buffer, dir: string): void {
 		offset += 512; // move past header
 
 		const ext = path.extname(name).toLowerCase();
-		if (size > 0 && ['.tex', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.eps', '.pdf', '.bbl'].includes(ext)) {
+		const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.eps', '.pdf'];
+		if (size > 0 && ['.tex', '.bbl', ...imageExts].includes(ext)) {
 			const content = data.subarray(offset, offset + size);
-			const outPath = path.join(dir, path.basename(name));
+			let outPath: string;
+			if (imageExts.includes(ext)) {
+				const imagesDir = path.join(dir, 'images');
+				fs.mkdirSync(imagesDir, { recursive: true });
+				outPath = path.join(imagesDir, path.basename(name));
+			} else {
+				outPath = path.join(dir, path.basename(name));
+			}
 			fs.writeFileSync(outPath, content);
 		}
 
@@ -132,7 +140,7 @@ function getPaperDir(plugin: CustomCodeblocksPlugin, data: PaperData): { dir: st
 	const noteName = activeFile.basename;
 	const paperTitle = sanitizeFilename(data.title || 'Untitled');
 	const basePath = expandHome(plugin.settings.downloadPath);
-	const dir = path.join(basePath, sanitizeFilename(noteName));
+	const dir = path.join(basePath, sanitizeFilename(noteName), paperTitle);
 	return { dir, pdfPath: path.join(dir, `${paperTitle}.pdf`), mdPath: path.join(dir, `${paperTitle}.md`) };
 }
 
