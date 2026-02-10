@@ -104,7 +104,8 @@ function extractTexFromTarball(buffer: Buffer, dir: string): void {
 
 		offset += 512; // move past header
 
-		if (name.endsWith('.tex') && size > 0) {
+		const ext = path.extname(name).toLowerCase();
+		if (size > 0 && ['.tex', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.eps', '.pdf', '.bbl'].includes(ext)) {
 			const content = data.subarray(offset, offset + size);
 			const outPath = path.join(dir, path.basename(name));
 			fs.writeFileSync(outPath, content);
