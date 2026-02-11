@@ -124,6 +124,11 @@ function extractTexFromTarball(buffer: Buffer, dir: string): void {
 	}
 }
 
+const COPY_PATH_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+	<rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+	<path d="M5 15H4C2.9 15 2 14.1 2 13V4C2 2.9 2.9 2 4 2H13C14.1 2 15 2.9 15 4V5" stroke="currentColor" stroke-width="2"/>
+</svg>`;
+
 const DOWNLOAD_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 	<path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 	<path d="M4 17V19C4 20.1 4.9 21 6 21H18C19.1 21 20 20.1 20 19V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -277,6 +282,21 @@ export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
 					shell.showItemInFolder(currentFile);
 				} else {
 					downloadPaper(plugin, data, downloadBtn);
+				}
+			});
+
+			// Copy path button
+			const copyBtn = container.createEl('button', {
+				cls: 'paper-card-copy',
+				attr: { 'aria-label': 'Copy path to clipboard' }
+			});
+			copyBtn.innerHTML = COPY_PATH_SVG;
+			copyBtn.addEventListener('click', (e) => {
+				e.stopPropagation();
+				const currentPaths = getPaperDir(plugin, data);
+				if (currentPaths) {
+					navigator.clipboard.writeText(currentPaths.dir);
+					new Notice('Copied path to clipboard');
 				}
 			});
 		}

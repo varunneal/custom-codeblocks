@@ -34,7 +34,7 @@ div:has(> .block-language-paper) {
 	position: relative;
 	display: inline-block;
 	width: min(650px, 100%);
-	padding: 10px 66px 10px 14px;
+	padding: 10px 92px 10px 14px;
 	border-left: 2px solid var(--text-normal);
 	background-color: var(--background-secondary);
 	border-radius: 0 4px 4px 0;
@@ -110,6 +110,40 @@ div:has(> .block-language-paper) {
 }
 
 .paper-card-download svg {
+	display: block;
+}
+
+.paper-card-copy,
+.paper-card-copy:focus,
+.paper-card-copy:active,
+.paper-card-copy:hover {
+	position: absolute;
+	top: 8px;
+	right: 62px;
+	background: none !important;
+	background-color: transparent !important;
+	border: none !important;
+	outline: none !important;
+	box-shadow: none !important;
+	border-radius: 0 !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	cursor: pointer;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	-webkit-appearance: none !important;
+	appearance: none !important;
+	line-height: 1;
+	height: 20px;
+	width: 20px;
+}
+
+.paper-card-copy:hover {
+	color: var(--text-normal);
+}
+
+.paper-card-copy svg {
 	display: block;
 }
 
