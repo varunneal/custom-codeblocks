@@ -39,7 +39,11 @@ function parsePaperContent(source: string): PaperData {
 }
 
 function sanitizeFilename(name: string): string {
-	return name.replace(/[<>:"/\\|?*]/g, '-').replace(/\s+/g, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+	return name
+		.replace(/[<>:"/\\|?*,;!@#$%^&()[\]{}'`~]/g, '')
+		.replace(/\s+/g, '-')
+		.replace(/-{2,}/g, '-')
+		.replace(/^-|-$/g, '');
 }
 
 function expandHome(filepath: string): string {
