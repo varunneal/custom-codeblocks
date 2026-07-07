@@ -317,8 +317,12 @@ export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
 				const currentPaths = getPaperDir(plugin, data);
 				const currentFile = currentPaths ? findSavedFile(currentPaths) : null;
 				if (currentFile) {
-					setButtonToFinder(downloadBtn, currentFile);
-					new Notice('Existing download found');
+					if (downloadBtn.getAttribute('aria-label') === 'Reveal in Finder') {
+						shell.showItemInFolder(currentFile);
+					} else {
+						setButtonToFinder(downloadBtn, currentFile);
+						new Notice('Existing download found');
+					}
 					return;
 				}
 				downloadPaper(plugin, data, downloadBtn);
