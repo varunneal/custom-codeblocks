@@ -1,8 +1,10 @@
-import { MarkdownView, Notice, requestUrl, htmlToMarkdown } from 'obsidian';
+import { MarkdownView, Notice, requestUrl, htmlToMarkdown, type RequestUrlResponse } from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as zlib from 'zlib';
+import * as https from 'https';
+import * as http from 'http';
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 const { shell } = require('electron') as { shell: { showItemInFolder(fullPath: string): void } };
 import type CustomCodeblocksPlugin from '../main';
@@ -68,6 +70,37 @@ function getDownloadUrls(link: string): { pdf: string; source: string | null } {
 	}
 	return { pdf: link, source: null };
 }
+
+function probeForCookies(url: string): Promise<{ status: number; cookies: string[] }> {
+	return new Promise((resolve, reject) => {
+		const parsed = new URL(url);
+		const mod = parsed.protocol === 'https:' ? https : http;
+		const req = mod.get(url, (res) => {
+			const cookies = (res.headers['set-cookie'] ?? []).map(c => c.split(';')[0]!.trim());
+			resolve({ status: res.statusCode ?? 0, cookies });
+			res.resume();
+		});
+		req.on('error', reject);
+	});
+}
+
+async function fetchWithCookieRetry(url: string): Promise<RequestUrlResponse> {
+	const probe = await probeForCookies(url);
+	if (probe.status === 403 && probe.cookies.length > 0) {
+		const response = await requestUrl({
+			url,
+			headers: { 'Cookie': probe.cookies.join('; ') },
+			throw: false,
+		});
+		if (response.status >= 400) {
+			throw new Error(`HTTP ${response.status} after cookie retry`);
+		}
+		return response;
+	}
+
+	return requestUrl({ url });
+}
+
 
 function extractTexFromTarball(buffer: Buffer, dir: string): void {
 	let data: Buffer;
@@ -153,9 +186,10 @@ function getPaperDir(plugin: CustomCodeblocksPlugin, data: PaperData): { dir: st
 	return { dir, pdfPath: path.join(dir, `${paperTitle}.pdf`), mdPath: path.join(dir, `${paperTitle}.md`) };
 }
 
-function findSavedFile(paths: { pdfPath: string; mdPath: string }): string | null {
+function findSavedFile(paths: { dir: string; pdfPath: string; mdPath: string }): string | null {
 	if (fs.existsSync(paths.pdfPath)) return paths.pdfPath;
 	if (fs.existsSync(paths.mdPath)) return paths.mdPath;
+	if (fs.existsSync(paths.dir)) return paths.dir;
 	return null;
 }
 
@@ -175,7 +209,8 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 
 	const existingFile = findSavedFile(paths);
 	if (existingFile) {
-		shell.showItemInFolder(existingFile);
+		setButtonToFinder(btn, existingFile);
+		new Notice('Existing download found');
 		return;
 	}
 
@@ -188,7 +223,7 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 
 		let savedAsMd = false;
 		const downloads: Promise<void>[] = [
-			requestUrl({ url: pdfUrl }).then(response => {
+			fetchWithCookieRetry(pdfUrl).then(response => {
 				const buf = Buffer.from(response.arrayBuffer);
 				if (buf.length >= 4 && buf.toString('utf-8', 0, 4) === '%PDF') {
 					fs.writeFileSync(pdfPath, buf);
@@ -205,7 +240,7 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 
 		if (sourceUrl) {
 			downloads.push(
-				requestUrl({ url: sourceUrl }).then(response => {
+				fetchWithCookieRetry(sourceUrl).then(response => {
 					extractTexFromTarball(Buffer.from(response.arrayBuffer), dir);
 				}).catch((err) => {
 					console.warn('TeX source fetch failed:', err);
@@ -259,9 +294,8 @@ export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
 			});
 			linkEl.setAttr('target', '_blank');
 			linkEl.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-				<path d="M6 2C4.9 2 4 2.9 4 4V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V8L14 2H6Z" stroke="currentColor" stroke-width="2" fill="none"/>
-				<path d="M14 2V8H20" stroke="currentColor" stroke-width="2" fill="none"/>
-				<text x="12" y="17" text-anchor="middle" font-size="6" font-weight="bold" fill="currentColor">PDF</text>
+				<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+				<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 			</svg>`;
 
 			// Download / Open in Finder button
@@ -283,10 +317,11 @@ export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
 				const currentPaths = getPaperDir(plugin, data);
 				const currentFile = currentPaths ? findSavedFile(currentPaths) : null;
 				if (currentFile) {
-					shell.showItemInFolder(currentFile);
-				} else {
-					downloadPaper(plugin, data, downloadBtn);
+					setButtonToFinder(downloadBtn, currentFile);
+					new Notice('Existing download found');
+					return;
 				}
+				downloadPaper(plugin, data, downloadBtn);
 			});
 
 			// Copy path button
