@@ -1,22 +1,28 @@
-import { MarkdownView, Notice, requestUrl, htmlToMarkdown, type RequestUrlResponse } from 'obsidian';
+import {
+	htmlToMarkdown,
+	Notice,
+	requestUrl,
+	setIcon,
+	type RequestUrlResponse,
+} from 'obsidian';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as zlib from 'zlib';
 import * as https from 'https';
 import * as http from 'http';
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron is provided by Obsidian at runtime.
 const { shell } = require('electron') as { shell: { showItemInFolder(fullPath: string): void } };
 import type CustomCodeblocksPlugin from '../main';
 
-interface PaperData {
+export interface PaperData {
 	title: string;
 	authors: string;
 	date: string;
 	link: string;
 }
 
-function parsePaperContent(source: string): PaperData {
+export function parsePaperContent(source: string): PaperData {
 	const data: PaperData = {
 		title: '',
 		authors: '',
@@ -161,45 +167,47 @@ function extractTexFromTarball(buffer: Buffer, dir: string): void {
 	}
 }
 
-const COPY_PATH_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-	<rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
-	<path d="M5 15H4C2.9 15 2 14.1 2 13V4C2 2.9 2.9 2 4 2H13C14.1 2 15 2.9 15 4V5" stroke="currentColor" stroke-width="2"/>
-</svg>`;
-
-const DOWNLOAD_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-	<path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-	<path d="M4 17V19C4 20.1 4.9 21 6 21H18C19.1 21 20 20.1 20 19V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>`;
-
-const FOLDER_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-	<path d="M2 6C2 4.9 2.9 4 4 4H9L11 6H20C21.1 6 22 6.9 22 8V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6Z" stroke="currentColor" stroke-width="2" fill="none"/>
-</svg>`;
-
-function getPaperDir(plugin: CustomCodeblocksPlugin, data: PaperData): { dir: string; pdfPath: string; mdPath: string } | null {
+export function getPaperDir(
+	plugin: CustomCodeblocksPlugin,
+	data: PaperData,
+	sourcePath?: string,
+): { dir: string; pdfPath: string; mdPath: string } | null {
 	const activeFile = plugin.app.workspace.getActiveFile();
-	if (!activeFile) return null;
+	const noteName = sourcePath
+		? path.basename(sourcePath, path.extname(sourcePath))
+		: activeFile?.basename;
+	if (!noteName) return null;
 
-	const noteName = activeFile.basename;
 	const paperTitle = sanitizeFilename(data.title || 'Untitled');
 	const basePath = expandHome(plugin.settings.downloadPath);
 	const dir = path.join(basePath, sanitizeFilename(noteName), paperTitle);
 	return { dir, pdfPath: path.join(dir, `${paperTitle}.pdf`), mdPath: path.join(dir, `${paperTitle}.md`) };
 }
 
-function findSavedFile(paths: { dir: string; pdfPath: string; mdPath: string }): string | null {
+export function findSavedFile(paths: { dir: string; pdfPath: string; mdPath: string }): string | null {
 	if (fs.existsSync(paths.pdfPath)) return paths.pdfPath;
 	if (fs.existsSync(paths.mdPath)) return paths.mdPath;
 	if (fs.existsSync(paths.dir)) return paths.dir;
 	return null;
 }
 
-function setButtonToFinder(btn: HTMLButtonElement, filepath: string) {
-	btn.innerHTML = FOLDER_SVG;
-	btn.setAttribute('aria-label', 'Reveal in Finder');
+export function setButtonToReveal(btn: HTMLButtonElement): void {
+	btn.empty();
+	setIcon(btn, 'folder-open');
+	btn.setAttribute('aria-label', 'Reveal in file manager');
 }
 
-async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, btn: HTMLButtonElement): Promise<void> {
-	const paths = getPaperDir(plugin, data);
+export function revealInFileManager(filepath: string): void {
+	shell.showItemInFolder(filepath);
+}
+
+export async function downloadPaper(
+	plugin: CustomCodeblocksPlugin,
+	data: PaperData,
+	btn: HTMLButtonElement,
+	sourcePath?: string,
+): Promise<void> {
+	const paths = getPaperDir(plugin, data, sourcePath);
 	if (!paths) {
 		new Notice('No active note found.');
 		return;
@@ -209,7 +217,7 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 
 	const existingFile = findSavedFile(paths);
 	if (existingFile) {
-		setButtonToFinder(btn, existingFile);
+		setButtonToReveal(btn);
 		new Notice('Existing download found');
 		return;
 	}
@@ -258,108 +266,8 @@ async function downloadPaper(plugin: CustomCodeblocksPlugin, data: PaperData, bt
 		} else {
 			new Notice(`Saved: ${pdfPath}`);
 		}
-		setButtonToFinder(btn, savedAsMd ? pdfPath.replace(/\.pdf$/, '.md') : pdfPath);
+		setButtonToReveal(btn);
 	} catch (err) {
 		new Notice(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
 	}
-}
-
-export function registerPaperCodeblock(plugin: CustomCodeblocksPlugin) {
-	plugin.registerMarkdownCodeBlockProcessor('paper', (source, el, ctx) => {
-		const data = parsePaperContent(source);
-
-		const container = el.createDiv({ cls: 'paper-card' });
-
-		// Click to edit (on the card, but not on links/buttons)
-		container.addEventListener('click', (e) => {
-			const target = e.target as HTMLElement;
-			if (target.tagName === 'A' || target.tagName === 'BUTTON' || target.closest('button')) return;
-
-			const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-			if (!view) return;
-
-			const sectionInfo = ctx.getSectionInfo(el);
-			if (!sectionInfo) return;
-
-			const editor = view.editor;
-			editor.setCursor({ line: sectionInfo.lineStart + 1, ch: 7 });
-			editor.focus();
-		});
-
-		// PDF icon in top right
-		if (data.link) {
-			const linkEl = container.createEl('a', {
-				href: data.link,
-				cls: 'paper-card-link'
-			});
-			linkEl.setAttr('target', '_blank');
-			linkEl.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-				<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-				<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-			</svg>`;
-
-			// Download / Open in Finder button
-			const downloadBtn = container.createEl('button', {
-				cls: 'paper-card-download',
-				attr: { 'aria-label': 'Download PDF' }
-			});
-
-			const paths = getPaperDir(plugin, data);
-			const existing = paths ? findSavedFile(paths) : null;
-			if (existing) {
-				setButtonToFinder(downloadBtn, existing);
-			} else {
-				downloadBtn.innerHTML = DOWNLOAD_SVG;
-			}
-
-			downloadBtn.addEventListener('click', (e) => {
-				e.stopPropagation();
-				const currentPaths = getPaperDir(plugin, data);
-				const currentFile = currentPaths ? findSavedFile(currentPaths) : null;
-				if (currentFile) {
-					if (downloadBtn.getAttribute('aria-label') === 'Reveal in Finder') {
-						shell.showItemInFolder(currentFile);
-					} else {
-						setButtonToFinder(downloadBtn, currentFile);
-						new Notice('Existing download found');
-					}
-					return;
-				}
-				downloadPaper(plugin, data, downloadBtn);
-			});
-
-			// Copy path button
-			const copyBtn = container.createEl('button', {
-				cls: 'paper-card-copy',
-				attr: { 'aria-label': 'Copy path to clipboard' }
-			});
-			copyBtn.innerHTML = COPY_PATH_SVG;
-			copyBtn.addEventListener('click', (e) => {
-				e.stopPropagation();
-				const currentPaths = getPaperDir(plugin, data);
-				if (currentPaths) {
-					navigator.clipboard.writeText(currentPaths.dir);
-					new Notice('Copied path to clipboard');
-				}
-			});
-		}
-
-		// Title
-		container.createEl('div', {
-			text: data.title || 'Untitled',
-			cls: 'paper-card-title'
-		});
-
-		// Metadata line (authors + date)
-		if (data.authors || data.date) {
-			let metaText = data.authors || '';
-			if (data.date) {
-				metaText += metaText ? ` (${data.date})` : data.date;
-			}
-			container.createEl('div', {
-				text: metaText,
-				cls: 'paper-card-meta'
-			});
-		}
-	});
 }

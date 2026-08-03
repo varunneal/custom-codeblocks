@@ -1,6 +1,4 @@
-/* Hide Obsidian's default code block styling */
-.markdown-reading-view .block-language-paper,
-.markdown-preview-view .block-language-paper,
+/* Paper block containers in Reading view and the CodeMirror widget. */
 .block-language-paper {
 	display: block;
 	box-shadow: none !important;
@@ -9,24 +7,14 @@
 	background: transparent !important;
 }
 
-.markdown-reading-view .block-language-paper:hover,
-.markdown-preview-view .block-language-paper:hover,
 .block-language-paper:hover {
 	box-shadow: none !important;
 	border: none !important;
 	background: transparent !important;
 }
 
-.cm-preview-code-block:has(.block-language-paper),
-div:has(> .block-language-paper) {
-	box-shadow: none !important;
-	border: none !important;
-	background: transparent !important;
-}
-
-.block-language-paper .edit-block-button,
-.cm-preview-code-block:has(.block-language-paper) .edit-block-button {
-	display: none !important;
+.markdown-source-view.mod-cm6 .custom-codeblocks-paper-widget {
+	width: 100%;
 }
 
 /* Paper card styling */
@@ -38,9 +26,17 @@ div:has(> .block-language-paper) {
 	border-left: 2px solid var(--text-normal);
 	background-color: var(--background-secondary);
 	border-radius: 0 4px 4px 0;
-	cursor: pointer;
 	transition: background-color 0.15s ease;
 	line-height: 1.5;
+}
+
+.paper-card[role="button"] {
+	cursor: pointer;
+}
+
+.paper-card:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
 }
 
 .paper-card:hover {
