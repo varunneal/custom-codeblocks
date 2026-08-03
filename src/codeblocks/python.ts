@@ -28,6 +28,8 @@ export function registerPythonCodeblock(plugin: Plugin) {
 
 		// Highlight the code
 		const highlighted = hljs.highlight(source, { language: 'python' });
-		code.innerHTML = highlighted.value;
+		const range = code.ownerDocument.createRange();
+		range.selectNodeContents(code);
+		code.appendChild(range.createContextualFragment(highlighted.value));
 	});
 }
