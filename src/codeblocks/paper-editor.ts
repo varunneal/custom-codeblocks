@@ -11,13 +11,21 @@ import {
 	Decoration,
 	EditorView,
 	keymap,
+	ViewPlugin,
 	WidgetType,
 	type DecorationSet,
+	type ViewUpdate,
 } from '@codemirror/view';
 import { editorInfoField, editorLivePreviewField } from 'obsidian';
 import type CustomCodeblocksPlugin from '../main';
-import { renderPaperCard } from './paper-card';
-import { parsePaperContent, type PaperData } from './paper';
+import {
+	renderPaperCard,
+	SEARCH_MATCH_CLASS,
+	setPaperCardMatches,
+	VISIBLE_PAPER_FIELDS,
+	type VisiblePaperField,
+} from './paper-card';
+import { parsePaperFields, type PaperData, type PaperFieldRanges } from './paper';
 
 interface PaperBlock {
 	from: number;
@@ -27,7 +35,14 @@ interface PaperBlock {
 	endLine: number;
 	source: string;
 	data: PaperData;
+	/** Field value ranges as absolute document positions. */
+	fields: PaperFieldRanges;
 }
+
+/** Finds the current block for a widget DOM node, so stale widgets never use old positions. */
+type BlockResolver = (view: EditorView, dom: HTMLElement) => PaperBlock | undefined;
+
+const WIDGET_CLASS = 'custom-codeblocks-paper-widget';
 
 interface PaperEditorState {
 	livePreview: boolean;
@@ -64,6 +79,11 @@ function findPaperBlocks(state: EditorState): PaperBlock[] {
 				? doc.line(closingLineNumber - 1).to
 				: contentFrom;
 			const source = doc.sliceString(contentFrom, contentTo);
+			const { data, ranges } = parsePaperFields(source);
+			const fields: PaperFieldRanges = {};
+			for (const [key, range] of Object.entries(ranges) as Array<[keyof PaperData, { from: number; to: number }]>) {
+				fields[key] = { from: contentFrom + range.from, to: contentFrom + range.to };
+			}
 			blocks.push({
 				from: openingLine.from,
 				to: closingLine.to,
@@ -71,7 +91,8 @@ function findPaperBlocks(state: EditorState): PaperBlock[] {
 				startLine: lineNumber,
 				endLine: closingLineNumber,
 				source,
-				data: parsePaperContent(source),
+				data,
+				fields,
 			});
 			lineNumber = closingLineNumber;
 			break;
@@ -104,24 +125,28 @@ class PaperCardWidget extends WidgetType {
 	constructor(
 		private readonly plugin: CustomCodeblocksPlugin,
 		private readonly block: PaperBlock,
+		private readonly resolveBlock: BlockResolver,
 		private readonly sourcePath?: string,
 	) {
 		super();
 	}
 
+	// Positions are left out on purpose: edits above the block shift it
+	// without a re-render. Handlers look up the current position on use.
 	eq(other: PaperCardWidget): boolean {
-		return this.block.from === other.block.from
-			&& this.block.to === other.block.to
-			&& this.block.source === other.block.source
+		return this.block.source === other.block.source
 			&& this.sourcePath === other.sourcePath;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const wrapper = view.dom.ownerDocument.createElement('div');
-		wrapper.className = 'block-language-paper custom-codeblocks-paper-widget';
+		wrapper.className = `block-language-paper ${WIDGET_CLASS}`;
 		renderPaperCard(this.plugin, this.block.data, wrapper, {
 			sourcePath: this.sourcePath,
-			onEdit: () => enterPaperBlock(view, this.block.editPos),
+			onEdit: () => {
+				const block = this.resolveBlock(view, wrapper);
+				if (block) enterPaperBlock(view, block.editPos);
+			},
 		});
 
 		const ResizeObserverConstructor = view.dom.ownerDocument.defaultView?.ResizeObserver;
@@ -144,6 +169,7 @@ class PaperCardWidget extends WidgetType {
 
 function buildDecorations(
 	plugin: CustomCodeblocksPlugin,
+	resolveBlock: BlockResolver,
 	state: EditorState,
 	blocks: PaperBlock[],
 	livePreview: boolean,
@@ -155,7 +181,7 @@ function buildDecorations(
 		.filter((block) => !selectionTouchesBlock(state, block))
 		.map((block) => Decoration.replace({
 			block: true,
-			widget: new PaperCardWidget(plugin, block, sourcePath),
+			widget: new PaperCardWidget(plugin, block, resolveBlock, sourcePath),
 		}).range(block.from, block.to));
 	return Decoration.set(ranges, true);
 }
@@ -164,18 +190,23 @@ function isLivePreview(state: EditorState): boolean {
 	return state.field(editorLivePreviewField, false) ?? false;
 }
 
-function createPaperState(plugin: CustomCodeblocksPlugin, state: EditorState): PaperEditorState {
+function createPaperState(
+	plugin: CustomCodeblocksPlugin,
+	resolveBlock: BlockResolver,
+	state: EditorState,
+): PaperEditorState {
 	const livePreview = isLivePreview(state);
 	const blocks = livePreview ? findPaperBlocks(state) : [];
 	return {
 		livePreview,
 		blocks,
-		decorations: buildDecorations(plugin, state, blocks, livePreview),
+		decorations: buildDecorations(plugin, resolveBlock, state, blocks, livePreview),
 	};
 }
 
 function updatePaperState(
 	plugin: CustomCodeblocksPlugin,
+	resolveBlock: BlockResolver,
 	value: PaperEditorState,
 	transaction: Transaction,
 ): PaperEditorState {
@@ -196,7 +227,7 @@ function updatePaperState(
 	return {
 		livePreview,
 		blocks,
-		decorations: buildDecorations(plugin, transaction.state, blocks, livePreview),
+		decorations: buildDecorations(plugin, resolveBlock, transaction.state, blocks, livePreview),
 	};
 }
 
@@ -263,11 +294,83 @@ function moveVerticallyAcrossPaper(
 	return true;
 }
 
+/**
+ * Collects the ranges of Obsidian's in-note search (Cmd+F) highlights that
+ * fall inside a block. Obsidian adds them as mark decorations, which cannot
+ * draw inside a replaced range, so the card has to draw them itself.
+ */
+function searchMatchesIn(view: EditorView, from: number, to: number): Array<{ from: number; to: number }> {
+	const matches: Array<{ from: number; to: number }> = [];
+	for (const source of view.state.facet(EditorView.decorations)) {
+		const set = typeof source === 'function' ? source(view) : source;
+		set.between(from, to, (matchFrom, matchTo, decoration) => {
+			const className = (decoration.spec as { class?: unknown }).class;
+			if (matchFrom >= to || matchTo <= from || typeof className !== 'string') return;
+			if (className.split(/\s+/).includes(SEARCH_MATCH_CLASS)) {
+				matches.push({ from: matchFrom, to: matchTo });
+			}
+		});
+	}
+	return matches;
+}
+
+function syncSearchMatches(view: EditorView, resolveBlock: BlockResolver): void {
+	view.contentDOM.querySelectorAll<HTMLElement>(`.${WIDGET_CLASS}`).forEach((wrapper) => {
+		const card = wrapper.querySelector<HTMLElement>('.paper-card');
+		if (!card) return;
+		const block = resolveBlock(view, wrapper);
+		const fieldMatches: Partial<Record<VisiblePaperField, Array<[number, number]>>> = {};
+		let hiddenMatch = false;
+
+		for (const match of block ? searchMatchesIn(view, block.from, block.to) : []) {
+			let covered = 0;
+			for (const field of VISIBLE_PAPER_FIELDS) {
+				const range = block?.fields[field];
+				if (!range) continue;
+				const start = Math.max(match.from, range.from);
+				const end = Math.min(match.to, range.to);
+				if (end <= start) continue;
+				(fieldMatches[field] ??= []).push([start - range.from, end - range.from]);
+				covered += end - start;
+			}
+			if (covered < match.to - match.from) hiddenMatch = true;
+		}
+
+		setPaperCardMatches(card, fieldMatches, hiddenMatch);
+	});
+}
+
 export function createPaperEditorExtension(plugin: CustomCodeblocksPlugin): Extension {
+	const resolveBlock: BlockResolver = (view, dom) => {
+		const pos = view.posAtDOM(dom);
+		return view.state.field(paperField).blocks.find((block) => block.from <= pos && pos <= block.to);
+	};
+
 	const paperField = StateField.define<PaperEditorState>({
-		create: (state) => createPaperState(plugin, state),
-		update: (value, transaction) => updatePaperState(plugin, value, transaction),
+		create: (state) => createPaperState(plugin, resolveBlock, state),
+		update: (value, transaction) => updatePaperState(plugin, resolveBlock, value, transaction),
 		provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
+	});
+
+	// Runs in the measure write phase, after CodeMirror has drawn the widgets.
+	const searchSync = ViewPlugin.fromClass(class {
+		private readonly measureKey = {};
+
+		constructor(view: EditorView) {
+			this.schedule(view);
+		}
+
+		update(update: ViewUpdate): void {
+			if (update.transactions.length > 0 || update.viewportChanged) this.schedule(update.view);
+		}
+
+		private schedule(view: EditorView): void {
+			view.requestMeasure({
+				key: this.measureKey,
+				read: () => null,
+				write: () => syncSearchMatches(view, resolveBlock),
+			});
+		}
 	});
 
 	const verticalNavigation = Prec.highest(keymap.of([
@@ -283,5 +386,5 @@ export function createPaperEditorExtension(plugin: CustomCodeblocksPlugin): Exte
 		},
 	]));
 
-	return [paperField, verticalNavigation];
+	return [paperField, verticalNavigation, searchSync];
 }

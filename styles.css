@@ -18,16 +18,35 @@
 }
 
 /* Paper card styling */
+/* Block layout: an inline-block card adds a baseline gap under it, so the
+   widget box (and its hitbox) would be taller than the visible card. */
 .paper-card {
 	position: relative;
-	display: inline-block;
+	display: block;
 	width: min(650px, 100%);
-	padding: 10px 92px 10px 14px;
+	padding: 10px 14px;
 	border-left: 2px solid var(--text-normal);
 	background-color: var(--background-secondary);
 	border-radius: 0 4px 4px 0;
 	transition: background-color 0.15s ease;
 	line-height: 1.5;
+}
+
+.paper-card.has-actions {
+	padding-right: 92px;
+}
+
+/* Cmd+F matches inside a rendered card. The native rule only targets
+   `.cm-s-obsidian span`, so reading view and card text need their own. */
+.paper-card .paper-card-search-match {
+	box-shadow: 0 0 0px 3px var(--text-accent);
+	mix-blend-mode: var(--highlight-mix-blend-mode);
+	border-radius: 2px;
+}
+
+/* Match in text the card hides, such as the link or a field key. */
+.paper-card.is-search-match {
+	box-shadow: 0 0 0 2px var(--text-accent);
 }
 
 .paper-card[role="button"] {

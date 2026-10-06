@@ -22,28 +22,40 @@ export interface PaperData {
 	link: string;
 }
 
-export function parsePaperContent(source: string): PaperData {
+/** Offsets of each field value, relative to the start of the block source. */
+export type PaperFieldRanges = Partial<Record<keyof PaperData, { from: number; to: number }>>;
+
+export function parsePaperFields(source: string): { data: PaperData; ranges: PaperFieldRanges } {
 	const data: PaperData = {
 		title: '',
 		authors: '',
 		date: '',
 		link: ''
 	};
+	const ranges: PaperFieldRanges = {};
 
-	const lines = source.split('\n');
-	for (const line of lines) {
+	let lineStart = 0;
+	for (const line of source.split('\n')) {
 		const colonIndex = line.indexOf(':');
-		if (colonIndex === -1) continue;
+		if (colonIndex !== -1) {
+			const key = line.substring(0, colonIndex).trim().toLowerCase();
+			const rawValue = line.substring(colonIndex + 1);
+			const value = rawValue.trim();
 
-		const key = line.substring(0, colonIndex).trim().toLowerCase();
-		const value = line.substring(colonIndex + 1).trim();
-
-		if (key in data) {
-			data[key as keyof PaperData] = value;
+			if (key in data) {
+				const from = lineStart + colonIndex + 1 + (rawValue.length - rawValue.trimStart().length);
+				data[key as keyof PaperData] = value;
+				ranges[key as keyof PaperData] = { from, to: from + value.length };
+			}
 		}
+		lineStart += line.length + 1;
 	}
 
-	return data;
+	return { data, ranges };
+}
+
+export function parsePaperContent(source: string): PaperData {
+	return parsePaperFields(source).data;
 }
 
 function sanitizeFilename(name: string): string {

@@ -25,7 +25,7 @@ export function renderPaperCard(
 	el: HTMLElement,
 	options: PaperCardOptions = {},
 ): HTMLElement {
-	const container = el.createDiv({ cls: 'paper-card' });
+	const container = el.createDiv({ cls: data.link ? 'paper-card has-actions' : 'paper-card' });
 
 	if (options.onEdit) {
 		container.tabIndex = 0;
@@ -97,21 +97,63 @@ export function renderPaperCard(
 		});
 	}
 
-	container.createEl('div', {
-		text: data.title || 'Untitled',
-		cls: 'paper-card-title'
-	});
+	const titleEl = container.createDiv({ cls: 'paper-card-title' });
+	if (data.title) {
+		titleEl.createSpan({ text: data.title, attr: { 'data-paper-field': 'title' } });
+	} else {
+		titleEl.setText('Untitled');
+	}
 
 	if (data.authors || data.date) {
-		let metaText = data.authors || '';
-		if (data.date) {
-			metaText += metaText ? ` (${data.date})` : data.date;
+		const metaEl = container.createDiv({ cls: 'paper-card-meta' });
+		if (data.authors) {
+			metaEl.createSpan({ text: data.authors, attr: { 'data-paper-field': 'authors' } });
 		}
-		container.createEl('div', {
-			text: metaText,
-			cls: 'paper-card-meta'
-		});
+		if (data.date) {
+			if (data.authors) metaEl.appendText(' (');
+			metaEl.createSpan({ text: data.date, attr: { 'data-paper-field': 'date' } });
+			if (data.authors) metaEl.appendText(')');
+		}
 	}
 
 	return container;
+}
+
+/** Fields whose values the card shows as text. */
+export const VISIBLE_PAPER_FIELDS = ['title', 'authors', 'date'] as const;
+export type VisiblePaperField = typeof VISIBLE_PAPER_FIELDS[number];
+
+export const SEARCH_MATCH_CLASS = 'obsidian-search-match-highlight';
+
+/**
+ * Marks search matches inside a rendered card. `fieldMatches` holds offsets
+ * into each field value. `hiddenMatch` flags a match in text the card does
+ * not show (keys, link), which outlines the whole card.
+ */
+export function setPaperCardMatches(
+	card: HTMLElement,
+	fieldMatches: Partial<Record<VisiblePaperField, Array<[number, number]>>>,
+	hiddenMatch: boolean,
+): void {
+	const signature = JSON.stringify([fieldMatches, hiddenMatch]);
+	if (card.dataset.searchMatches === signature) return;
+	card.dataset.searchMatches = signature;
+	card.toggleClass('is-search-match', hiddenMatch);
+
+	card.querySelectorAll<HTMLElement>('[data-paper-field]').forEach((fieldEl) => {
+		const text = fieldEl.textContent ?? '';
+		const matches = (fieldMatches[fieldEl.dataset.paperField as VisiblePaperField] ?? [])
+			.slice()
+			.sort((a, b) => a[0] - b[0]);
+		fieldEl.empty();
+		let offset = 0;
+		for (const [from, to] of matches) {
+			const start = Math.max(from, offset);
+			if (to <= start) continue;
+			if (start > offset) fieldEl.appendText(text.slice(offset, start));
+			fieldEl.createSpan({ cls: `${SEARCH_MATCH_CLASS} paper-card-search-match`, text: text.slice(start, to) });
+			offset = to;
+		}
+		if (offset < text.length) fieldEl.appendText(text.slice(offset));
+	});
 }
